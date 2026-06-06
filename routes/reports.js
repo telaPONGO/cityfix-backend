@@ -24,9 +24,18 @@ const getApiHost = (req) => {
 const normalizeImagePath = (imagePath, apiHost) => {
   if (!imagePath || typeof imagePath !== 'string') return null;
   const trimmed = imagePath.trim();
+  
+  // Already a valid remote URL
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
+  
+  // Already a data URL
+  if (trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  
+  // Convert relative uploads paths to absolute URLs
   const normalized = trimmed.replace(/\\/g, '/');
   if (normalized.startsWith('uploads/')) {
     return `${apiHost}/${normalized}`;
@@ -34,6 +43,9 @@ const normalizeImagePath = (imagePath, apiHost) => {
   if (normalized.startsWith('/uploads/')) {
     return `${apiHost}${normalized}`;
   }
+  
+  // Anything else is invalid (local device path, etc.)
+  console.warn(`[normalizeImagePath] Ignorando ruta inválida (local device): ${trimmed.substring(0, 80)}`);
   return null;
 };
 
@@ -50,9 +62,7 @@ router.get('/', async (req, res) => {
     const normalizedReports = reports.map((report) => {
       const doc = report.toObject();
       const normalizedPath = normalizeImagePath(doc.imagePath, apiHost);
-      if (normalizedPath) {
-        doc.imagePath = normalizedPath;
-      }
+      doc.imagePath = normalizedPath || null;
       return doc;
     });
     return res.json(normalizedReports);
@@ -69,9 +79,7 @@ router.get('/my', authenticate, async (req, res) => {
     const normalizedReports = reports.map((report) => {
       const doc = report.toObject();
       const normalizedPath = normalizeImagePath(doc.imagePath, apiHost);
-      if (normalizedPath) {
-        doc.imagePath = normalizedPath;
-      }
+      doc.imagePath = normalizedPath || null;
       return doc;
     });
     return res.json(normalizedReports);
@@ -82,8 +90,14 @@ router.get('/my', authenticate, async (req, res) => {
 
 router.post('/', authenticate, async (req, res) => {
   try {
+    console.log('[POST /reports] ========== INICIO ==========');
     console.log('[POST /reports] Usuario:', req.user?.email);
-    console.log('[POST /reports] Body tiene imagePath:', !!req.body.imagePath);
+    console.log('[POST /reports] Tiene imagePath:', !!req.body.imagePath);
+    if (req.body.imagePath) {
+      const pathPreview = req.body.imagePath.substring(0, 100);
+      console.log('[POST /reports] imagePath preview:', pathPreview);
+    }
+    console.log('[POST /reports] Campos enviados:', Object.keys(req.body));
 
     const { id, user, userName, userLastname, clientId, imagePath, ...reportData } = req.body;
 
