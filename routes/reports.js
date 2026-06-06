@@ -1,11 +1,18 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
 const Report = require('../models/Report');
 const authenticate = require('../middleware/auth');
 
 const router = express.Router();
 const upload = multer({ dest: 'uploads/' });
+
+// Ensure uploads directory exists
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads', { recursive: true });
+}
 
 router.get('/', async (req, res) => {
   try {
@@ -35,9 +42,9 @@ router.get('/my', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   try {
     console.log('[POST /reports] Usuario:', req.user?.email);
-    console.log('[POST /reports] Body:', req.body);
+    console.log('[POST /reports] Body tiene imagePath:', !!req.body.imagePath);
 
-    const { id, user, userName, userLastname, clientId, ...reportData } = req.body;
+    const { id, user, userName, userLastname, clientId, imagePath, ...reportData } = req.body;
 
     // Basic validation
     if (!reportData.titulo || !reportData.descripcion) {
@@ -45,8 +52,41 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Título y descripción son requeridos' });
     }
 
+    // Process image if provided
+    let processedImagePath = null;
+    if (imagePath && imagePath.startsWith('data:')) {
+      try {
+        // Extract base64 data from data URL
+        const matches = imagePath.match(/^data:([^;]+);base64,(.+)$/);
+        if (matches) {
+          const mimeType = matches[1];
+          const base64Data = matches[2];
+          const buffer = Buffer.from(base64Data, 'base64');
+          
+          // Generate unique filename
+          const ext = mimeType.split('/')[1] || 'jpg';
+          const filename = `report_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+          const filepath = path.join('uploads', filename);
+          
+          // Save file
+          fs.writeFileSync(filepath, buffer);
+          
+          // Get API host from environment or build URL
+          const apiHost = process.env.API_HOST || 
+            `http://${req.get('host')}`;
+          processedImagePath = `${apiHost}/uploads/${filename}`;
+          console.log('[POST /reports] Imagen guardada:', processedImagePath);
+        }
+      } catch (error) {
+        console.error('[POST /reports] Error procesando imagen:', error);
+      }
+    } else if (imagePath) {
+      processedImagePath = imagePath;
+    }
+
     const report = new Report({
       ...reportData,
+      imagePath: processedImagePath,
       clientId: req.user.id,
       user: req.user.email,
       userName: userName ?? req.body.userName ?? '',
