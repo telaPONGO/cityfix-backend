@@ -7,12 +7,35 @@ const Report = require('../models/Report');
 const authenticate = require('../middleware/auth');
 
 const router = express.Router();
-const upload = multer({ dest: 'uploads/' });
+const uploadDir = path.join(__dirname, '..', 'uploads');
+const upload = multer({ dest: uploadDir });
 
 // Ensure uploads directory exists
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads', { recursive: true });
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
 }
+
+const getApiHost = (req) => {
+  const host = req.get('host');
+  const protocol = host?.includes('onrender.com') || host?.includes('production') ? 'https' : 'http';
+  return process.env.API_HOST?.replace(/\/$/, '') || `${protocol}://${host}`;
+};
+
+const normalizeImagePath = (imagePath, apiHost) => {
+  if (!imagePath || typeof imagePath !== 'string') return null;
+  const trimmed = imagePath.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  const normalized = trimmed.replace(/\\/g, '/');
+  if (normalized.startsWith('uploads/')) {
+    return `${apiHost}/${normalized}`;
+  }
+  if (normalized.startsWith('/uploads/')) {
+    return `${apiHost}${normalized}`;
+  }
+  return null;
+};
 
 router.get('/', async (req, res) => {
   try {
@@ -23,7 +46,16 @@ router.get('/', async (req, res) => {
     console.log('[GET /reports] Obteniendo reportes con filtro:', filter);
     const reports = await Report.find(filter).sort({ fecha: -1 });
     console.log(`[GET /reports] Se encontraron ${reports.length} reportes`);
-    return res.json(reports);
+    const apiHost = getApiHost(req);
+    const normalizedReports = reports.map((report) => {
+      const doc = report.toObject();
+      const normalizedPath = normalizeImagePath(doc.imagePath, apiHost);
+      if (normalizedPath) {
+        doc.imagePath = normalizedPath;
+      }
+      return doc;
+    });
+    return res.json(normalizedReports);
   } catch (error) {
     console.error('[GET /reports] Error:', error);
     return res.status(500).json({ message: 'Error al obtener reportes', error });
@@ -33,7 +65,16 @@ router.get('/', async (req, res) => {
 router.get('/my', authenticate, async (req, res) => {
   try {
     const reports = await Report.find({ clientId: req.user.id }).sort({ fecha: -1 });
-    return res.json(reports);
+    const apiHost = getApiHost(req);
+    const normalizedReports = reports.map((report) => {
+      const doc = report.toObject();
+      const normalizedPath = normalizeImagePath(doc.imagePath, apiHost);
+      if (normalizedPath) {
+        doc.imagePath = normalizedPath;
+      }
+      return doc;
+    });
+    return res.json(normalizedReports);
   } catch (error) {
     return res.status(500).json({ message: 'Error al obtener mis reportes', error });
   }
@@ -70,7 +111,7 @@ router.post('/', authenticate, async (req, res) => {
           // Generate unique filename
           const ext = mimeType.split('/')[1] || 'jpg';
           const filename = `report_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-          const filepath = path.join('uploads', filename);
+          const filepath = path.join(uploadDir, filename);
           
           // Save file
           fs.writeFileSync(filepath, buffer);
@@ -82,13 +123,9 @@ router.post('/', authenticate, async (req, res) => {
         console.error('[POST /reports] Error procesando imagen:', error);
       }
     } else if (imagePath) {
-      if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-        processedImagePath = imagePath;
-      } else if (imagePath.startsWith('/uploads') || imagePath.startsWith('uploads/')) {
-        const normalizedPath = imagePath.startsWith('/')
-          ? imagePath
-          : '/'+imagePath;
-        processedImagePath = `${apiHost}${normalizedPath}`;
+      const normalized = normalizeImagePath(imagePath, apiHost);
+      if (normalized) {
+        processedImagePath = normalized;
       } else {
         console.warn('[POST /reports] Ignorando imagePath no válido o local:', imagePath);
       }
