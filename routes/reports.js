@@ -72,8 +72,10 @@ router.post('/', authenticate, async (req, res) => {
           fs.writeFileSync(filepath, buffer);
           
           // Get API host from environment or build URL
+          const host = req.get('host');
+          const protocol = host?.includes('onrender.com') || host?.includes('production') ? 'https' : 'http';
           const apiHost = process.env.API_HOST || 
-            `http://${req.get('host')}`;
+            `${protocol}://${host}`;
           processedImagePath = `${apiHost}/uploads/${filename}`;
           console.log('[POST /reports] Imagen guardada:', processedImagePath);
         }
