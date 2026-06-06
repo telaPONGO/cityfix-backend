@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const multer = require('multer');
 const Report = require('../models/Report');
 const authenticate = require('../middleware/auth');
@@ -12,9 +13,12 @@ router.get('/', async (req, res) => {
     if (req.query.userId) {
       filter.clientId = req.query.userId;
     }
+    console.log('[GET /reports] Obteniendo reportes con filtro:', filter);
     const reports = await Report.find(filter).sort({ fecha: -1 });
+    console.log(`[GET /reports] Se encontraron ${reports.length} reportes`);
     return res.json(reports);
   } catch (error) {
+    console.error('[GET /reports] Error:', error);
     return res.status(500).json({ message: 'Error al obtener reportes', error });
   }
 });
@@ -30,19 +34,32 @@ router.get('/my', authenticate, async (req, res) => {
 
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { id, user, clientId, ...reportData } = req.body;
+    console.log('[POST /reports] Usuario:', req.user?.email);
+    console.log('[POST /reports] Body:', req.body);
+
+    const { id, user, userName, userLastname, clientId, ...reportData } = req.body;
+
+    // Basic validation
+    if (!reportData.titulo || !reportData.descripcion) {
+      console.warn('[POST /reports] Datos inválidos:', reportData);
+      return res.status(400).json({ message: 'Título y descripción son requeridos' });
+    }
 
     const report = new Report({
       ...reportData,
       clientId: req.user.id,
       user: req.user.email,
+      userName: userName ?? req.body.userName ?? '',
+      userLastname: userLastname ?? req.body.userLastname ?? '',
     });
 
     await report.save();
 
+    console.log('[POST /reports] Reporte creado con id:', report._id);
     return res.status(201).json(report);
   } catch (error) {
-    return res.status(500).json({ message: 'Error al crear reporte', error });
+    console.error('[POST /reports] Error al crear reporte:', error);
+    return res.status(500).json({ message: 'Error al crear reporte', error: error?.message || error });
   }
 });
 
@@ -74,6 +91,28 @@ router.patch('/:id', async (req, res) => {
     return res.json(report);
   } catch (error) {
     return res.status(500).json({ message: 'Error al actualizar reporte', error });
+  }
+});
+
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const reportId = req.params.id;
+    console.log('[DELETE /reports/:id] request id:', reportId, 'userId:', req.user.id);
+
+    if (!mongoose.Types.ObjectId.isValid(reportId)) {
+      console.warn('[DELETE /reports/:id] id inválido:', reportId);
+      return res.status(400).json({ message: 'ID de reporte inválido' });
+    }
+
+    const report = await Report.findOne({ _id: reportId, clientId: req.user.id });
+    if (!report) {
+      return res.status(404).json({ message: 'Reporte no encontrado o sin permiso para eliminar' });
+    }
+    await report.deleteOne();
+    return res.json({ message: 'Reporte eliminado correctamente' });
+  } catch (error) {
+    console.error('[DELETE /reports/:id] Error:', error);
+    return res.status(500).json({ message: 'Error al eliminar reporte', error: error?.message || error });
   }
 });
 

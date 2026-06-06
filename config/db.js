@@ -46,6 +46,28 @@ const connectDB = async () => {
   // Connect with mongoose (v7+ default options are OK)
   await mongoose.connect(uri);
   console.log('MongoDB conectado.');
+
+  try {
+    const db = mongoose.connection.db;
+    const coll = db.collection('reports');
+    const indexes = await coll.indexes();
+    console.log('[DB] Índices en collection reports:', indexes.map(i => ({ name: i.name, key: i.key, unique: i.unique })));
+
+    // Buscar y eliminar índice único accidental sobre clientId
+    for (const idx of indexes) {
+      if (idx.key && idx.key.clientId && idx.unique) {
+        console.warn('[DB] Índice único inesperado sobre clientId detectado (', idx.name, '). Eliminando índice para permitir múltiples reportes por usuario.');
+        try {
+          await coll.dropIndex(idx.name);
+          console.log('[DB] Índice', idx.name, 'eliminado.');
+        } catch (dropErr) {
+          console.error('[DB] Error al eliminar índice', idx.name, dropErr);
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[DB] No fue posible verificar/ajustar índices en la colección reports:', err.message || err);
+  }
 };
 
 module.exports = connectDB;

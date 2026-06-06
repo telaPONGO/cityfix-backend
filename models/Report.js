@@ -8,6 +8,8 @@ const reportSchema = new mongoose.Schema({
   estado: { type: String, default: 'Pendiente' },
   fecha: { type: Date, default: Date.now },
   user: { type: String, required: true },
+  userName: { type: String },
+  userLastname: { type: String },
   ciudad: { type: String, required: true },
   categoria: { type: String, required: true },
   imagePath: { type: String },

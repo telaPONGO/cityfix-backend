@@ -20,9 +20,14 @@ app.get('/', (req, res) => {
 
 const initialPort = parseInt(process.env.PORT, 10) || 3001;
 
+console.log('Environment variables loaded:');
+console.log('  PORT:', process.env.PORT || '3001 (default)');
+console.log('  MONGODB_URI:', process.env.MONGODB_URI ? 'Configured ✓' : 'NOT CONFIGURED ✗');
+console.log('  JWT_SECRET:', process.env.JWT_SECRET ? 'Configured ✓' : 'NOT CONFIGURED ✗');
+
 const startServer = (port, attempts = 0) => {
   const server = app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
+    console.log(`✓ Server running on port ${port}`);
   });
 
   server.on('error', (err) => {
@@ -44,8 +49,9 @@ const startServer = (port, attempts = 0) => {
 
 connectDB()
   .then(() => {
+    console.log('✓ Conectado a MongoDB. Iniciando servidor...');
     startServer(initialPort);
   })
   .catch((error) => {
-    console.error('Error connecting to database:', error);
+    console.error('✗ Error connecting to database:', error);
   });
