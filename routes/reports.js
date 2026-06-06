@@ -54,6 +54,10 @@ router.post('/', authenticate, async (req, res) => {
 
     // Process image if provided
     let processedImagePath = null;
+    const host = req.get('host');
+    const protocol = host?.includes('onrender.com') || host?.includes('production') ? 'https' : 'http';
+    const apiHost = process.env.API_HOST?.replace(/\/$/, '') || `${protocol}://${host}`;
+
     if (imagePath && imagePath.startsWith('data:')) {
       try {
         // Extract base64 data from data URL
@@ -71,11 +75,6 @@ router.post('/', authenticate, async (req, res) => {
           // Save file
           fs.writeFileSync(filepath, buffer);
           
-          // Get API host from environment or build URL
-          const host = req.get('host');
-          const protocol = host?.includes('onrender.com') || host?.includes('production') ? 'https' : 'http';
-          const apiHost = process.env.API_HOST || 
-            `${protocol}://${host}`;
           processedImagePath = `${apiHost}/uploads/${filename}`;
           console.log('[POST /reports] Imagen guardada:', processedImagePath);
         }
@@ -83,7 +82,16 @@ router.post('/', authenticate, async (req, res) => {
         console.error('[POST /reports] Error procesando imagen:', error);
       }
     } else if (imagePath) {
-      processedImagePath = imagePath;
+      if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+        processedImagePath = imagePath;
+      } else if (imagePath.startsWith('/uploads') || imagePath.startsWith('uploads/')) {
+        const normalizedPath = imagePath.startsWith('/')
+          ? imagePath
+          : '/'+imagePath;
+        processedImagePath = `${apiHost}${normalizedPath}`;
+      } else {
+        console.warn('[POST /reports] Ignorando imagePath no válido o local:', imagePath);
+      }
     }
 
     const report = new Report({
