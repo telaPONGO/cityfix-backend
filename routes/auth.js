@@ -114,12 +114,19 @@ router.put('/profile', authenticate, async (req, res) => {
       return res.status(401).json({ message: 'Usuario no autenticado' });
     }
 
-    const { name, lastname, birthdate, profileImage, password } = req.body;
+    const { name, lastname, email, birthdate, profileImage, password } = req.body;
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'Usuario no encontrado' });
     }
 
+    if (email && email !== user.email) {
+      const existing = await User.findOne({ email });
+      if (existing) {
+        return res.status(409).json({ message: 'El correo ya está registrado' });
+      }
+      user.email = email;
+    }
     if (name) user.name = name;
     if (lastname) user.lastname = lastname;
     if (birthdate) user.birthdate = birthdate;
@@ -129,10 +136,18 @@ router.put('/profile', authenticate, async (req, res) => {
     }
 
     await user.save();
+
+    const token = jwt.sign(
+      { id: user._id.toString(), email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
     console.log('[PUT /auth/profile] Perfil actualizado para:', user.email);
     return res.status(200).json({
       message: 'Perfil actualizado',
       user: sanitizeUser(user),
+      token,
     });
   } catch (error) {
     console.error('[PUT /auth/profile] Error:', error);
