@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const authenticate = require('../middleware/auth');
 const User = require('../models/User');
 
 const router = express.Router();
@@ -102,6 +103,39 @@ router.post('/login', async (req, res) => {
     });
   } catch (error) {
     console.error('[POST /auth/login] Error:', error);
+    return res.status(500).json({ message: 'Error interno', error });
+  }
+});
+
+router.put('/profile', authenticate, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ message: 'Usuario no autenticado' });
+    }
+
+    const { name, lastname, birthdate, profileImage, password } = req.body;
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Usuario no encontrado' });
+    }
+
+    if (name) user.name = name;
+    if (lastname) user.lastname = lastname;
+    if (birthdate) user.birthdate = birthdate;
+    if (profileImage !== undefined) user.profileImage = profileImage;
+    if (password && password.trim() !== '') {
+      user.password = await bcrypt.hash(password, 10);
+    }
+
+    await user.save();
+    console.log('[PUT /auth/profile] Perfil actualizado para:', user.email);
+    return res.status(200).json({
+      message: 'Perfil actualizado',
+      user: sanitizeUser(user),
+    });
+  } catch (error) {
+    console.error('[PUT /auth/profile] Error:', error);
     return res.status(500).json({ message: 'Error interno', error });
   }
 });
