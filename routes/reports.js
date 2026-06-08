@@ -115,26 +115,15 @@ router.post('/', authenticate, async (req, res) => {
 
     if (imagePath && imagePath.startsWith('data:')) {
       try {
-        // Extract base64 data from data URL
         const matches = imagePath.match(/^data:([^;]+);base64,(.+)$/);
         if (matches) {
-          const mimeType = matches[1];
-          const base64Data = matches[2];
-          const buffer = Buffer.from(base64Data, 'base64');
-          
-          // Generate unique filename
-          const ext = mimeType.split('/')[1] || 'jpg';
-          const filename = `report_${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
-          const filepath = path.join(uploadDir, filename);
-          
-          // Save file
-          fs.writeFileSync(filepath, buffer);
-          
-          processedImagePath = `${apiHost}/uploads/${filename}`;
-          console.log('[POST /reports] Imagen guardada:', processedImagePath);
+          // Store base64 image data directly in MongoDB to avoid relying on ephemeral
+          // backend disk storage for uploaded report images.
+          processedImagePath = imagePath;
+          console.log('[POST /reports] Imagen guardada en DB como data URL');
         }
       } catch (error) {
-        console.error('[POST /reports] Error procesando imagen:', error);
+        console.error('[POST /reports] Error procesando imagen base64:', error);
       }
     } else if (imagePath) {
       const normalized = normalizeImagePath(imagePath, apiHost);
