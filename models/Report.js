@@ -10,7 +10,6 @@ const reportSchema = new mongoose.Schema({
   user: { type: String, required: true },
   userName: { type: String },
   userLastname: { type: String },
-  ciudad: { type: String, required: true },
   categoria: { type: String, required: true },
   imagePath: { type: String },
   latitude: { type: Number },
